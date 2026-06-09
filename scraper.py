@@ -24,7 +24,7 @@ KEYWORDS = [
 ]
 
 def scrape_trends():
-    pytrends = TrendReq(hl='en-US', tz=360)
+    pytrends = TrendReq(hl='en-US', tz=360, timeout=(10,25), retries=2, backoff_factor=0.1)
     today = date.today().isoformat()
 
     pytrends.build_payload(KEYWORDS, cat=45, timeframe='today 3-m', geo='US')
