@@ -2,8 +2,8 @@ name: Run trends scraper
 
 on:
   schedule:
-    - cron: '0 8,20 * * *'  # 8am y 8pm UTC
-  workflow_dispatch:          # permite correrlo manualmente
+    - cron: '0 8,20 * * *'
+  workflow_dispatch:
 
 jobs:
   scrape:
@@ -22,4 +22,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
         run: python scraper.py
