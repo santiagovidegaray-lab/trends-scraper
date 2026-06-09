@@ -1,14 +1,15 @@
 import time
 from datetime import date
-from pytrends.request import TrendReq
 from supabase import create_client
 import os
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+SERPAPI_KEY = os.environ["SERPAPI_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -23,48 +24,58 @@ KEYWORDS = [
     'cortisol'
 ]
 
+def get_trend(keyword):
+    params = {
+        "engine": "google_trends",
+        "q": keyword,
+        "date": "today 3-m",
+        "geo": "US",
+        "cat": "45",
+        "api_key": SERPAPI_KEY
+    }
+    response = requests.get("https://serpapi.com/search", params=params)
+    return response.json()
+
 def scrape_trends():
-    pytrends = TrendReq(hl='en-US', tz=360, timeout=(10,25), retries=2, backoff_factor=0.1)
     today = date.today().isoformat()
-
-    pytrends.build_payload(KEYWORDS, cat=45, timeframe='today 3-m', geo='US')
-    time.sleep(5)
-    df = pytrends.interest_over_time()
-
     rows = []
-    for kw in KEYWORDS:
-        if kw in df.columns:
-            latest_value = int(df[kw].iloc[-1])
-            rows.append({
-                "keyword": kw,
-                "value": latest_value,
-                "recorded_at": today,
-                "region": "US"
-            })
+    rising_rows = []
+
+    for keyword in KEYWORDS:
+        print(f"Procesando: {keyword}")
+        try:
+            data = get_trend(keyword)
+
+            # interest over time
+            timeline = data.get("interest_over_time", {}).get("timeline_data", [])
+            if timeline:
+                latest = timeline[-1]
+                value = latest.get("values", [{}])[0].get("extracted_value", 0)
+                rows.append({
+                    "keyword": keyword,
+                    "value": int(value),
+                    "recorded_at": today,
+                    "region": "US"
+                })
+
+            # rising queries
+            rising = data.get("related_queries", {}).get("rising", [])
+            for r in rising[:5]:
+                rising_rows.append({
+                    "parent_kw": keyword,
+                    "query": r.get("query", ""),
+                    "value": str(r.get("extracted_value", "Breakout")),
+                    "recorded_at": today
+                })
+
+        except Exception as e:
+            print(f"Error en {keyword}: {e}")
+
+        time.sleep(2)
 
     if rows:
         supabase.table("trends").upsert(rows, on_conflict="keyword,recorded_at").execute()
         print(f"✓ {len(rows)} trends guardados")
-
-    time.sleep(5)
-
-    related = pytrends.related_queries()
-    rising_rows = []
-
-    for kw in KEYWORDS:
-        time.sleep(3)
-        try:
-            rising_df = related[kw]['rising']
-            if rising_df is not None and not rising_df.empty:
-                for _, row in rising_df.head(5).iterrows():
-                    rising_rows.append({
-                        "parent_kw": kw,
-                        "query": row['query'],
-                        "value": str(row['value']),
-                        "recorded_at": today
-                    })
-        except Exception as e:
-            print(f"Error en {kw}: {e}")
 
     if rising_rows:
         supabase.table("rising_queries").insert(rising_rows).execute()
