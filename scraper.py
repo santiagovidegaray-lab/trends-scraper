@@ -74,7 +74,8 @@ def scrape_trends():
         time.sleep(2)
 
     if rows:
-        supabase.table("trends").upsert(rows, on_conflict="keyword,recorded_at").execute()
+        for row in rows:
+    supabase.table("trends").upsert(row).execute()
         print(f"✓ {len(rows)} trends guardados")
 
     if rising_rows:
